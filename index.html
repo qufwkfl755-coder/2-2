@@ -2,124 +2,140 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>체험 프로그램 배정 관리</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
-        body { font-family: 'Noto Sans KR', sans-serif; background-color: #f8fafc; }
-        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); transition: all 0.3s ease; }
-        .modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
-        .locked { opacity: 0.4; pointer-events: none; filter: grayscale(1); }
-        .auth-success { border-color: #10b981 !important; background-color: #ecfdf5; }
+        body { 
+            font-family: 'Noto Sans KR', sans-serif; 
+            background-color: #f8fafc; 
+            -webkit-tap-highlight-color: transparent;
+        }
+        .card { background: white; border-radius: 16px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); transition: all 0.3s ease; }
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); }
+        .locked { opacity: 0.3; pointer-events: none; filter: grayscale(1); }
+        .auth-success { border-color: #10b981 !important; background-color: #f0fdf4; }
+        
+        /* 모바일 터치 영역 최적화 */
+        select, input, button {
+            min-height: 48px;
+            font-size: 16px !important; /* 모바일 자동 줌 방지 */
+        }
     </style>
 </head>
-<body class="p-4 md:p-8">
+<body class="p-3 md:p-8">
     <div class="max-w-6xl mx-auto">
-        <header class="mb-8 text-center">
-            <h1 class="text-3xl font-bold text-slate-800">체험 프로그램 배정 관리 시스템</h1>
-            <p class="text-slate-500 mt-2">본인의 비밀번호(생년월일 4자리)를 입력하여 신청하세요.</p>
+        <header class="mb-6 mt-4 text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-slate-800 tracking-tight">체험 프로그램 신청</h1>
+            <p class="text-slate-500 mt-2 text-sm md:text-base">비밀번호(생년월일 4자리)를 입력하세요.</p>
         </header>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- 왼쪽: 신청 및 인증 -->
-            <div class="lg:col-span-1">
-                <div id="inputCard" class="card p-6 sticky top-8 border-t-4 border-blue-500">
-                    <h2 class="text-xl font-bold mb-4 text-slate-700 border-b pb-2">학생 본인 인증</h2>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- 왼쪽: 신청 및 인증 (모바일에서 상단 배치) -->
+            <div class="lg:col-span-1 order-1">
+                <div id="inputCard" class="card p-5 md:p-6 sticky top-4 border-t-4 border-blue-500">
+                    <h2 class="text-lg md:text-xl font-bold mb-4 text-slate-700 border-b pb-2 flex items-center">
+                        <span class="mr-2">👤</span>본인 인증
+                    </h2>
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-sm font-medium text-slate-600 mb-1">이름 선택</label>
-                            <select id="studentSelect" onchange="resetAuth()" class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                            <label class="block text-sm font-medium text-slate-600 mb-1">학생 이름</label>
+                            <select id="studentSelect" onchange="resetAuth()" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 border-slate-200 transition-all">
                                 <option value="">이름을 선택하세요</option>
                             </select>
                         </div>
                         <div id="authSection">
-                            <label class="block text-sm font-medium text-slate-600 mb-1">비밀번호(숫자 4자리)</label>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">비밀번호 (숫자 4자리)</label>
                             <div class="flex gap-2">
-                                <input id="studentPw" type="password" maxlength="4" class="flex-1 p-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" placeholder="****">
-                                <button onclick="verifyStudent()" class="px-4 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-700 text-sm font-bold transition">확인</button>
+                                <input id="studentPw" type="password" maxlength="4" inputmode="numeric" class="flex-1 p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none border-slate-200" placeholder="****">
+                                <button onclick="verifyStudent()" class="px-5 py-2 bg-slate-800 text-white rounded-xl hover:bg-slate-700 font-bold transition">확인</button>
                             </div>
                         </div>
                     </div>
 
                     <div id="programSection" class="mt-8 pt-6 border-t locked">
-                        <h2 class="text-xl font-bold mb-4 text-slate-700">프로그램 선택</h2>
+                        <h2 class="text-lg md:text-xl font-bold mb-4 text-slate-700 flex items-center">
+                            <span class="mr-2">📝</span>프로그램 선택
+                        </h2>
                         <div class="space-y-4">
                             <div>
-                                <label class="block text-sm font-medium text-slate-600 mb-1">오전 프로그램</label>
-                                <select id="amSelect" class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none">
-                                    <option value="">오전 프로그램 선택</option>
+                                <label class="block text-sm font-medium text-slate-600 mb-1">오전 프로그램 (AM)</label>
+                                <select id="amSelect" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50">
+                                    <option value="">오전 선택</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-slate-600 mb-1">오후 프로그램</label>
-                                <select id="pmSelect" class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none">
-                                    <option value="">오후 프로그램 선택</option>
+                                <label class="block text-sm font-medium text-slate-600 mb-1">오후 프로그램 (PM)</label>
+                                <select id="pmSelect" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50">
+                                    <option value="">오후 선택</option>
                                 </select>
                             </div>
-                            <button id="submitBtn" onclick="addAssignment()" class="w-full bg-blue-600 text-white py-3 rounded-md hover:bg-blue-700 transition font-bold mt-4 shadow-lg">신청 완료</button>
+                            <button id="submitBtn" onclick="addAssignment()" class="w-full bg-blue-600 text-white py-4 rounded-xl hover:bg-blue-700 transition font-bold mt-4 shadow-lg text-lg">신청 완료</button>
                         </div>
                     </div>
                     
                     <div class="mt-6 pt-4 border-t">
-                        <button onclick="checkUnassigned()" class="w-full bg-slate-100 text-slate-700 py-2 rounded-md hover:bg-slate-200 transition text-sm font-medium border border-slate-300">
-                            🔍 미배정 학생 확인
+                        <button onclick="checkUnassigned()" class="w-full bg-slate-50 text-slate-600 py-3 rounded-xl hover:bg-slate-100 transition text-sm font-medium border border-slate-200">
+                            🔍 미신청 학생 확인
                         </button>
                     </div>
 
-                    <div id="msgBox" class="mt-4 p-3 rounded-md text-sm hidden text-center font-bold"></div>
+                    <div id="msgBox" class="mt-4 p-4 rounded-xl text-sm hidden text-center font-bold animate-pulse"></div>
                 </div>
             </div>
 
-            <!-- 오른쪽: 현황판 -->
-            <div class="lg:col-span-2 space-y-8">
+            <!-- 오른쪽: 현황판 (모바일에서 하단 배치) -->
+            <div class="lg:col-span-2 space-y-6 order-2">
                 <!-- 프로그램별 잔여석 현황 -->
-                <div class="card p-6">
-                    <h2 class="text-xl font-bold mb-4 text-slate-700 border-b pb-2">실시간 잔여석 현황</h2>
+                <div class="card p-5 md:p-6">
+                    <h2 class="text-lg md:text-xl font-bold mb-4 text-slate-700 border-b pb-2 flex items-center">
+                        <span class="mr-2">📊</span>실시간 잔여석
+                    </h2>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <h3 class="font-bold text-blue-600 mb-3 flex items-center">
-                                <span class="w-3 h-3 bg-blue-600 rounded-full mr-2"></span>오전 (AM)
+                        <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                            <h3 class="font-bold text-blue-700 mb-3 flex items-center text-sm md:text-base">
+                                <span class="w-2.5 h-2.5 bg-blue-600 rounded-full mr-2"></span>오전 (AM)
                             </h3>
-                            <div id="amStatus" class="space-y-2 text-sm"></div>
+                            <div id="amStatus" class="space-y-2 text-xs md:text-sm"></div>
                         </div>
-                        <div>
-                            <h3 class="font-bold text-orange-600 mb-3 flex items-center">
-                                <span class="w-3 h-3 bg-orange-600 rounded-full mr-2"></span>오후 (PM)
+                        <div class="bg-orange-50/50 p-4 rounded-xl border border-orange-100">
+                            <h3 class="font-bold text-orange-700 mb-3 flex items-center text-sm md:text-base">
+                                <span class="w-2.5 h-2.5 bg-orange-600 rounded-full mr-2"></span>오후 (PM)
                             </h3>
-                            <div id="pmStatus" class="space-y-2 text-sm"></div>
+                            <div id="pmStatus" class="space-y-2 text-xs md:text-sm"></div>
                         </div>
                     </div>
                 </div>
 
                 <!-- 배정 명단 -->
-                <div class="card p-6">
-                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 border-b pb-4 gap-4">
+                <div class="card p-5 md:p-6 overflow-hidden">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b pb-4 gap-4">
                         <div>
-                            <h2 class="text-xl font-bold text-slate-700">배정 명단 (가나다순)</h2>
-                            <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold mt-1 inline-block">
+                            <h2 class="text-lg md:text-xl font-bold text-slate-700">신청 명단 (가나다순)</h2>
+                            <span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold mt-1 inline-block">
                                 <span id="totalCount">0</span> / 20명 완료
                             </span>
                         </div>
-                        <button onclick="downloadExcel()" class="bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition text-sm font-bold flex items-center gap-2 shadow-sm">
+                        <button onclick="downloadExcel()" class="w-full sm:w-auto bg-emerald-600 text-white px-4 py-3 rounded-xl hover:bg-emerald-700 transition text-sm font-bold flex items-center justify-center gap-2 shadow-sm">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
                             엑셀(.csv) 다운로드
                         </button>
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-sm">
+                    <div class="overflow-x-auto -mx-5 px-5 md:mx-0 md:px-0">
+                        <table class="w-full text-left text-xs md:text-sm min-w-[400px]">
                             <thead class="bg-slate-50">
                                 <tr>
                                     <th class="p-3 font-bold text-slate-600 border-b">성명</th>
-                                    <th class="p-3 font-bold text-slate-600 border-b">오전 프로그램</th>
-                                    <th class="p-3 font-bold text-slate-600 border-b">오후 프로그램</th>
+                                    <th class="p-3 font-bold text-slate-600 border-b">오전</th>
+                                    <th class="p-3 font-bold text-slate-600 border-b">오후</th>
                                     <th class="p-3 font-bold text-slate-600 border-b text-center">관리</th>
                                 </tr>
                             </thead>
                             <tbody id="assignmentTable">
-                                <!-- 가나다순 데이터 자동 삽입 -->
+                                <!-- 데이터 삽입 -->
                             </tbody>
                         </table>
                     </div>
@@ -130,17 +146,16 @@
 
     <!-- 미배정 학생 모달 -->
     <div id="unassignedModal" class="modal flex items-center justify-center">
-        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl border-2 border-slate-200">
-            <h3 class="text-xl font-bold mb-4 text-slate-800 border-b pb-2">미배정 학생 명단</h3>
-            <div id="unassignedList" class="grid grid-cols-2 gap-2 text-sm text-slate-600 py-2"></div>
-            <div class="mt-6 flex justify-end">
-                <button onclick="closeModal()" class="px-6 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-700 transition font-bold">닫기</button>
+        <div class="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-slate-200">
+            <h3 class="text-xl font-bold mb-4 text-slate-800 border-b pb-2">미신청 학생</h3>
+            <div id="unassignedList" class="grid grid-cols-2 gap-2 text-xs md:text-sm text-slate-600 py-2"></div>
+            <div class="mt-6">
+                <button onclick="closeModal()" class="w-full py-3 bg-slate-800 text-white rounded-xl hover:bg-slate-700 transition font-bold">닫기</button>
             </div>
         </div>
     </div>
 
     <script>
-        // 학생 마스터 데이터
         const studentMaster = {
             "강호윤": "1126", "김건우": "0604", "김민수": "1117", "김시훈": "0612", "김어진": "0426",
             "김예은": "0925", "류혜림": "0910", "박윤정": "0522", "서지민": "0703", "신의현": "0516",
@@ -177,7 +192,7 @@
         function showMessage(text, isError = false) {
             const box = document.getElementById('msgBox');
             box.innerText = text;
-            box.className = `mt-4 p-3 rounded-md text-sm ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`;
+            box.className = `mt-4 p-4 rounded-xl text-sm ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`;
             box.classList.remove('hidden');
             setTimeout(() => box.classList.add('hidden'), 3500);
         }
@@ -195,7 +210,7 @@
             const pw = document.getElementById('studentPw').value;
 
             if (!name) {
-                showMessage("먼저 이름을 선택해주세요.", true);
+                showMessage("이름을 선택해주세요.", true);
                 return;
             }
 
@@ -204,9 +219,11 @@
                 document.getElementById('programSection').classList.remove('locked');
                 document.getElementById('authSection').classList.add('locked');
                 document.getElementById('inputCard').classList.add('auth-success');
-                showMessage(`${name} 학생 인증 성공! 프로그램을 선택할 수 있습니다.`);
+                showMessage(`${name} 학생 인증되었습니다.`, false);
+                // 모바일에서 입력 후 바로 아래로 스크롤 이동 유도
+                window.scrollBy({ top: 100, behavior: 'smooth' });
             } else {
-                showMessage("비밀번호가 틀렸습니다. 다시 확인해주세요.", true);
+                showMessage("비밀번호가 틀렸습니다.", true);
             }
         }
 
@@ -227,7 +244,7 @@
                 const isDone = assignedNames.includes(name);
                 const opt = document.createElement('option');
                 opt.value = name;
-                opt.innerText = isDone ? `${name} (신청 완료)` : name;
+                opt.innerText = isDone ? `${name} (완료)` : name;
                 if (isDone) opt.disabled = true;
                 studentSelect.appendChild(opt);
             });
@@ -245,19 +262,19 @@
             const currentVal = selectElem.value;
             
             statusDiv.innerHTML = '';
-            selectElem.innerHTML = `<option value="">${type === 'am' ? '오전' : '오후'} 프로그램 선택</option>`;
+            selectElem.innerHTML = `<option value="">${type === 'am' ? '오전' : '오후'} 선택</option>`;
             
             programData[type].forEach(p => {
                 const used = usage[p.id] || 0;
                 const left = p.limit - used;
                 const div = document.createElement('div');
-                div.className = `flex justify-between p-2 rounded border ${left <= 0 ? 'bg-red-50 text-red-400 border-red-100' : 'bg-white border-slate-100'}`;
-                div.innerHTML = `<span>${p.name}</span> <span class="font-mono font-bold ${left <= 0 ? 'text-red-500' : 'text-slate-600'}">${used}/${p.limit}</span>`;
+                div.className = `flex justify-between p-2.5 rounded-lg border ${left <= 0 ? 'bg-red-50 text-red-400 border-red-100' : 'bg-white border-slate-200'}`;
+                div.innerHTML = `<span class="truncate pr-2">${p.name}</span> <span class="font-mono font-bold whitespace-nowrap">${used}/${p.limit}</span>`;
                 statusDiv.appendChild(div);
 
                 const opt = document.createElement('option');
                 opt.value = p.id;
-                opt.innerText = `${p.name} (잔여: ${left})`;
+                opt.innerText = `${p.name} (${left}석 남음)`;
                 if (left <= 0) opt.disabled = true;
                 selectElem.appendChild(opt);
             });
@@ -273,20 +290,24 @@
                 const amProg = programData.am.find(p => p.id == a.amId).name;
                 const pmProg = programData.pm.find(p => p.id == a.pmId).name;
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50 transition border-b";
+                tr.className = "hover:bg-slate-50 transition border-b border-slate-100";
                 tr.innerHTML = `
                     <td class="p-3 font-bold text-slate-800">${a.name}</td>
-                    <td class="p-3 text-blue-600">${amProg}</td>
-                    <td class="p-3 text-orange-600">${pmProg}</td>
+                    <td class="p-3 text-blue-600 font-medium">${amProg.split('-')[1] || amProg}</td>
+                    <td class="p-3 text-orange-600 font-medium">${pmProg.split('-')[1] || pmProg}</td>
                     <td class="p-3 text-center">
-                        <button onclick="removeAssignment('${a.name}')" class="text-xs bg-red-50 text-red-500 hover:bg-red-100 px-2 py-1 rounded transition">취소</button>
+                        <button onclick="removeAssignment('${a.name}')" class="text-red-400 hover:text-red-600 p-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
                     </td>
                 `;
                 tableBody.appendChild(tr);
             });
             
             if (assignments.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-slate-400 italic">아직 신청 내역이 없습니다.</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="4" class="p-10 text-center text-slate-400 italic">아직 신청자가 없습니다.</td></tr>';
             }
         }
 
@@ -296,7 +317,7 @@
             const pmId = document.getElementById('pmSelect').value;
 
             if (!amId || !pmId) {
-                showMessage("오전과 오후 프로그램을 모두 선택해야 합니다.", true);
+                showMessage("오전/오후 모두 선택해주세요.", true);
                 return;
             }
 
@@ -304,7 +325,7 @@
             const pmProg = programData.pm.find(p => p.id == pmId).name;
 
             if (amProg === pmProg) {
-                showMessage("오전과 오후에 같은 프로그램을 중복해서 신청할 수 없습니다.", true);
+                showMessage("오전/오후 중복 선택은 불가합니다.", true);
                 return;
             }
 
@@ -312,46 +333,34 @@
             resetAuth();
             document.getElementById('studentSelect').value = '';
             updateUI();
-            showMessage("신청 완료! 배정 명단에서 본인의 이름을 확인하세요.");
+            showMessage("신청이 완료되었습니다! 하단 명단을 확인하세요.");
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
         }
 
         function removeAssignment(name) {
-            if (confirm(`'${name}' 학생의 신청 내역을 삭제하시겠습니까?`)) {
+            if (confirm(`'${name}' 학생의 신청을 취소할까요?`)) {
                 assignments = assignments.filter(a => a.name !== name);
                 updateUI();
             }
         }
 
-        // 엑셀 다운로드 기능
         function downloadExcel() {
             if (assignments.length === 0) {
-                alert("다운로드할 데이터가 없습니다.");
+                alert("데이터가 없습니다.");
                 return;
             }
-
-            // 가나다순 정렬
             const sortedData = [...assignments].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-            
-            // CSV 헤더
-            let csvContent = "\uFEFF"; // 한글 깨짐 방지 BOM
-            csvContent += "성명,오전 프로그램,오후 프로그램\n";
-
-            // CSV 데이터 행 생성
+            let csvContent = "\uFEFF성명,오전 프로그램,오후 프로그램\n";
             sortedData.forEach(a => {
                 const amProg = programData.am.find(p => p.id == a.amId).name;
                 const pmProg = programData.pm.find(p => p.id == a.pmId).name;
                 csvContent += `${a.name},${amProg},${pmProg}\n`;
             });
-
-            // 파일 다운로드 트리거
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
-            const dateStr = new Date().toLocaleDateString().replace(/\s/g, '');
-            
             link.setAttribute("href", url);
-            link.setAttribute("download", `체험프로그램_배정결과_${dateStr}.csv`);
-            link.style.visibility = 'hidden';
+            link.setAttribute("download", `배정결과_${new Date().toLocaleDateString()}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -364,11 +373,11 @@
             listDiv.innerHTML = '';
             
             if (unassigned.length === 0) {
-                listDiv.innerHTML = '<p class="col-span-2 text-green-600 font-bold text-center py-4">모든 학생의 배정이 끝났습니다! ✨</p>';
+                listDiv.innerHTML = '<p class="col-span-2 text-blue-600 font-bold text-center py-4 text-sm">모두 신청 완료! 🎉</p>';
             } else {
                 unassigned.forEach(name => {
                     const span = document.createElement('div');
-                    span.className = "bg-slate-50 p-2 rounded border border-slate-200 text-center font-bold text-slate-700 shadow-sm";
+                    span.className = "bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center font-bold text-slate-700 shadow-sm";
                     span.innerText = name;
                     listDiv.appendChild(span);
                 });
