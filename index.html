@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>체험 프로그램 배정 관리 시스템 (V2 수정)</title>
+    <title>체험 신청 시스템</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -168,7 +168,6 @@
                 userInfoSection.classList.remove('hidden');
                 userNameDisplay.innerText = isAdmin ? "관리자" : authenticatedUser;
                 
-                // 관리자일 경우 신청 섹션(STEP 2) 숨김
                 if (isAdmin) {
                     programSection.classList.add('hidden');
                     adminBadge.classList.remove('hidden');
@@ -282,7 +281,7 @@
 <body class="p-4 md:p-10">
     <div class="max-w-5xl mx-auto space-y-8 text-slate-800">
         <header class="text-center">
-            <h1 class="text-3xl font-extrabold tracking-tight">방과후 체험 신청 시스템</h1>
+            <h1 class="text-3xl font-extrabold tracking-tight">체험 신청 시스템</h1>
             <p class="text-slate-500 mt-2">전체 20명 학생 명단이 적용되었습니다.</p>
         </header>
 
@@ -315,7 +314,7 @@
                     <div id="msgBox" class="hidden"></div>
                 </div>
 
-                <!-- STEP 2. 프로그램 선택 (교사 모드에서는 hidden 처리됨) -->
+                <!-- STEP 2. 프로그램 선택 -->
                 <div id="programSection" class="card p-6 shadow-md locked">
                     <h2 class="font-bold mb-6 text-slate-700 italic underline decoration-orange-200">STEP 2. 프로그램 선택</h2>
                     <div class="space-y-6">
