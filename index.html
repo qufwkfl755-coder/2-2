@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2학년 2반 체험 신청 시스템</title>
+    <title>체험 프로그램 신청 시스템</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -19,12 +19,13 @@
             appId: "1:531736022723:web:90fab577f55a1456635c76"
         };
 
-        const appId = 'program-assign-2-2-final'; 
+        const appId = 'program-assign-v2'; 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         const ADMIN_PW = "2026";
 
+        // 2학년 2반 학생 데이터
         const studentMaster = {
             "강호윤": "1126", "김건우": "0604", "김민수": "1117", "김시훈": "0612", "김어진": "0426",
             "김예은": "0925", "류혜림": "0910", "박윤정": "0522", "서지민": "0703", "신의현": "0516",
@@ -32,6 +33,7 @@
             "임지민": "1119", "정윤주": "0715", "조진무": "0407", "조해준": "0515", "한은서": "0426"
         };
 
+        // 2학년 2반 프로그램 인원 데이터
         const programData = {
             am: [
                 { id: 1, name: "요리-구름도우피자", limit: 2 },
@@ -60,11 +62,8 @@
         let isAdmin = false;
 
         onAuthStateChanged(auth, async (user) => {
-            if (!user) {
-                await signInAnonymously(auth);
-            } else {
-                listenData();
-            }
+            if (!user) await signInAnonymously(auth);
+            else listenData();
         });
 
         function listenData() {
@@ -80,21 +79,20 @@
             const inputPw = document.getElementById('studentPw').value.trim();
             if (inputPw === ADMIN_PW) { 
                 isAdmin = true; authenticatedUser = "관리자"; 
-                updateUI(); showMessage("관리자 모드로 접속했습니다.");
+                updateUI(); showMessage("관리자 모드 접속.");
                 return; 
             }
-            if (!name) return showMessage("이름을 선택해주세요.", true);
+            if (!name) return showMessage("이름을 선택하세요.", true);
             if (studentMaster[name] === inputPw) {
                 authenticatedUser = name; isAdmin = false;
+                updateUI(); 
                 const existing = assignments.find(a => a.name === name);
-                updateUI(); // 먼저 UI를 그려서 드롭다운을 생성함
                 if (existing) {
                     document.getElementById('amSelect').value = existing.amId;
                     document.getElementById('pmSelect').value = existing.pmId;
                 }
-                showMessage(`${name}님, 인증되었습니다.`);
-                refreshSubmitButton();
-            } else { showMessage("비밀번호가 틀렸습니다.", true); }
+                showMessage(`${name}님 인증 완료.`);
+            } else { showMessage("비밀번호 오류.", true); }
         };
 
         window.logout = () => {
@@ -103,7 +101,6 @@
             document.getElementById('amSelect').value = "";
             document.getElementById('pmSelect').value = "";
             updateUI();
-            showMessage("로그아웃 되었습니다.");
         };
 
         window.saveAssignment = async () => {
@@ -111,20 +108,29 @@
             const amId = document.getElementById('amSelect').value;
             const pmId = document.getElementById('pmSelect').value;
             
+            if (!amId || !pmId) return showMessage("모두 선택해주세요.", true);
+            if (amId === pmId) return showMessage("오전/오후가 중복됩니다.", true);
+
             const btn = document.getElementById('submitBtn');
             btn.disabled = true;
             btn.innerText = "처리 중...";
 
             try {
+                // 서버에서 최신 데이터 다시 확인
                 const snapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'assignments'));
-                const latestOthers = snapshot.docs.map(doc => doc.data()).filter(a => a.name !== authenticatedUser);
+                const latest = snapshot.docs.map(doc => doc.data()).filter(a => a.name !== authenticatedUser);
                 
-                const amFull = latestOthers.filter(a => a.amId == amId).length >= programData.am.find(p=>p.id == amId).limit;
-                const pmFull = latestOthers.filter(a => a.pmId == pmId).length >= programData.pm.find(p=>p.id == pmId).limit;
+                const amCount = latest.filter(a => a.amId == amId).length;
+                const pmCount = latest.filter(a => a.pmId == pmId).length;
+                const amLimit = programData.am.find(p=>p.id == amId).limit;
+                const pmLimit = programData.pm.find(p=>p.id == pmId).limit;
 
-                if (amFull || pmFull) {
-                    showMessage("그 사이 자리가 찼습니다. 다른 항목을 골라주세요.", true);
-                    refreshSubmitButton();
+                if (amCount >= amLimit || pmCount >= pmLimit) {
+                    showMessage("매진된 프로그램이 포함되어 있습니다. 다시 선택하세요.", true);
+                    // 초기화 로직: 선택창 초기화
+                    document.getElementById('amSelect').value = "";
+                    document.getElementById('pmSelect').value = "";
+                    resetButton();
                     return;
                 }
 
@@ -134,12 +140,19 @@
                 
                 document.getElementById('successModal').classList.remove('hidden');
                 document.getElementById('successModal').classList.add('flex');
-                refreshSubmitButton();
+                resetButton();
             } catch (e) {
-                showMessage("오류가 발생했습니다.", true);
-                refreshSubmitButton();
+                showMessage("오류 발생. 다시 시도하세요.", true);
+                resetButton();
             }
         };
+
+        function resetButton() {
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = false;
+            const existing = assignments.find(a => a.name === authenticatedUser);
+            btn.innerText = existing ? "신청 내역 수정하기" : "신청 완료";
+        }
 
         window.closeModal = () => {
             document.getElementById('successModal').classList.add('hidden');
@@ -147,7 +160,7 @@
         };
 
         window.deleteEntry = async (name) => {
-            if (confirm(`${name} 학생의 신청을 취소하시겠습니까?`)) {
+            if (confirm(`${name} 삭제?`)) {
                 await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'assignments', name));
             }
         };
@@ -158,33 +171,30 @@
                 document.getElementById('userInfoSection').classList.remove('hidden');
                 document.getElementById('userNameDisplay').innerText = isAdmin ? "관리자" : authenticatedUser;
                 document.getElementById('programSection').classList.remove('locked');
-                if (isAdmin) document.getElementById('programSection').classList.add('hidden');
             } else {
                 document.getElementById('authInputGroup').classList.remove('hidden');
                 document.getElementById('userInfoSection').classList.add('hidden');
                 document.getElementById('programSection').classList.add('locked');
             }
 
-            // 1. 학생 선택 드롭다운 갱신
             const sel = document.getElementById('studentSelect');
-            const currentVal = sel.value;
+            const currentName = sel.value;
             const doneNames = assignments.map(a => a.name);
             sel.innerHTML = '<option value="">성명 선택</option>';
             Object.keys(studentMaster).sort().forEach(name => {
                 const opt = document.createElement('option');
                 opt.value = name;
-                opt.innerText = name + (doneNames.includes(name) ? " (신청완료)" : "");
+                opt.innerText = name + (doneNames.includes(name) ? " (완료)" : "");
                 sel.appendChild(opt);
             });
-            sel.value = currentVal;
+            sel.value = currentName;
 
-            // 2. 프로그램 선택 드롭다운 옵션 생성 (이 부분 추가)
-            const renderOptions = (type, selectId) => {
+            const renderOpts = (type, selectId) => {
                 const selectElem = document.getElementById(selectId);
-                const current = selectElem.value;
+                const currentVal = selectElem.value;
                 const others = assignments.filter(a => a.name !== authenticatedUser);
                 
-                selectElem.innerHTML = '<option value="">프로그램 선택</option>';
+                selectElem.innerHTML = '<option value="">선택하세요</option>';
                 programData[type].forEach(p => {
                     const count = others.filter(a => a[`${type}Id`] == p.id).length;
                     const isFull = count >= p.limit;
@@ -194,206 +204,136 @@
                     if (isFull) opt.disabled = true;
                     selectElem.appendChild(opt);
                 });
-                selectElem.value = current;
+                selectElem.value = currentVal;
             };
 
-            renderOptions('am', 'amSelect');
-            renderOptions('pm', 'pmSelect');
-
-            renderStatusBars();
-            refreshSubmitButton();
+            renderOpts('am', 'amSelect');
+            renderOpts('pm', 'pmSelect');
+            renderStatus();
             renderTable();
         }
 
-        function renderStatusBars() {
+        function renderStatus() {
             const draw = (type, statusId) => {
-                const statusDiv = document.getElementById(statusId);
-                statusDiv.innerHTML = '';
+                const div = document.getElementById(statusId);
+                div.innerHTML = '';
                 programData[type].forEach(p => {
                     const count = assignments.filter(a => a[`${type}Id`] == p.id).length;
                     const isFull = count >= p.limit;
-                    const bar = document.createElement('div');
-                    bar.className = `p-3 rounded-xl border text-sm flex justify-between items-center ${isFull ? 'bg-red-50 text-red-500 border-red-100' : 'bg-white border-slate-100'}`;
-                    bar.innerHTML = `<span>${p.name}</span> <span class="font-bold font-mono">${count}/${p.limit}</span>`;
-                    statusDiv.appendChild(bar);
+                    const item = document.createElement('div');
+                    item.className = `p-3 rounded-xl border text-sm flex justify-between items-center ${isFull ? 'bg-red-50 text-red-500 border-red-100' : 'bg-white border-slate-100'}`;
+                    item.innerHTML = `<span>${p.name}</span> <span class="font-bold">${count}/${p.limit}</span>`;
+                    div.appendChild(item);
                 });
             };
             draw('am', 'amStatus');
             draw('pm', 'pmStatus');
         }
 
-        window.refreshSubmitButton = () => {
-            const amSelect = document.getElementById('amSelect');
-            const pmSelect = document.getElementById('pmSelect');
-            const submitBtn = document.getElementById('submitBtn');
-            
-            if (!submitBtn) return;
-
-            const amId = amSelect.value;
-            const pmId = pmSelect.value;
-            const existing = assignments.find(a => a.name === authenticatedUser);
-            const others = assignments.filter(a => a.name !== authenticatedUser);
-
-            let isError = false;
-            let errorMsg = "";
-
-            if (!amId || !pmId) {
-                isError = true;
-                errorMsg = "프로그램을 선택하세요";
-            } else if (amId === pmId) {
-                isError = true;
-                errorMsg = "오전/오후 중복 선택 불가";
-            } else {
-                const amFull = others.filter(a => a.amId == amId).length >= programData.am.find(p=>p.id == amId).limit;
-                const pmFull = others.filter(a => a.pmId == pmId).length >= programData.pm.find(p=>p.id == pmId).limit;
-                
-                if (amFull || pmFull) {
-                    isError = true;
-                    errorMsg = "매진된 항목 포함됨";
-                }
-            }
-
-            if (isError) {
-                submitBtn.disabled = true;
-                submitBtn.innerText = errorMsg;
-                submitBtn.className = "w-full py-5 bg-slate-400 text-white rounded-2xl font-black shadow-xl cursor-not-allowed";
-            } else {
-                submitBtn.disabled = false;
-                submitBtn.innerText = existing ? "신청 내역 수정하기" : "신청 완료";
-                submitBtn.className = "w-full py-5 bg-blue-600 text-white rounded-2xl font-black shadow-xl shadow-blue-100 transition-all hover:scale-[1.02] active:scale-95";
-            }
-        }
-
         function renderTable() {
             const tbody = document.getElementById('assignmentTable');
-            if (!tbody) return;
             tbody.innerHTML = '';
             [...assignments].sort((a,b)=>a.name.localeCompare(b.name, 'ko')).forEach(a => {
                 const tr = document.createElement('tr');
-                tr.className = "border-b hover:bg-slate-50 transition-colors";
+                tr.className = "border-b text-sm";
                 tr.innerHTML = `
-                    <td class="p-4 font-bold text-slate-700">${a.name}</td>
-                    <td class="p-4 text-sm text-blue-600">${programData.am.find(p=>p.id==a.amId)?.name || "-"}</td>
-                    <td class="p-4 text-sm text-orange-600">${programData.pm.find(p=>p.id==a.pmId)?.name || "-"}</td>
-                    <td class="p-4 text-center">
-                        ${isAdmin ? `<button onclick="deleteEntry('${a.name}')" class="text-red-400 hover:text-red-600 text-xs font-bold px-2 py-1 bg-red-50 rounded-lg">삭제</button>` : '-'}
+                    <td class="p-3 font-bold text-slate-700">${a.name}</td>
+                    <td class="p-3 text-blue-600">${programData.am.find(p=>p.id==a.amId)?.name || "-"}</td>
+                    <td class="p-3 text-orange-600">${programData.pm.find(p=>p.id==a.pmId)?.name || "-"}</td>
+                    <td class="p-3 text-center">
+                        ${isAdmin ? `<button onclick="deleteEntry('${a.name}')" class="text-red-400">삭제</button>` : '-'}
                     </td>
                 `;
                 tbody.appendChild(tr);
             });
-            const totalCount = document.getElementById('totalCount');
-            if (totalCount) totalCount.innerText = assignments.length;
+            document.getElementById('totalCount').innerText = assignments.length;
         }
 
         window.showMessage = (msg, isErr) => {
             const box = document.getElementById('msgBox');
-            if (!box) return;
-            box.innerText = msg; box.className = `mt-4 p-4 rounded-2xl text-center text-xs font-bold ${isErr ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`;
+            box.innerText = msg; box.className = `mt-4 p-4 rounded-xl text-center text-xs font-bold ${isErr ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`;
             box.classList.remove('hidden'); setTimeout(() => box.classList.add('hidden'), 3000);
         };
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
-        body { font-family: 'Noto Sans KR', sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; }
-        .card { background: white; border-radius: 28px; box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05); }
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #f1f5f9; }
+        .card { background: white; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
         .locked { opacity: 0.3; pointer-events: none; filter: grayscale(1); }
-        .modal-overlay { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); }
-        select { background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"); background-position: right 1rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem; -webkit-appearance: none; -moz-appearance: none; appearance: none; }
+        .modal-overlay { background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); }
     </style>
 </head>
-<body class="p-4 md:p-10 pb-20">
+<body class="p-4 md:p-8">
     <div id="successModal" class="fixed inset-0 z-50 hidden items-center justify-center p-6 modal-overlay">
-        <div class="bg-white rounded-[32px] p-8 max-w-sm w-full text-center shadow-2xl">
-            <div class="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">✓</div>
-            <h3 class="text-2xl font-black text-slate-900 mb-2">신청이 완료되었습니다</h3>
-            <p class="text-slate-500 mb-8 font-medium leading-relaxed">2학년 2반 학생의 선택 정보가<br>데이터베이스에 저장되었습니다.</p>
-            <button onclick="closeModal()" class="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-xl transition-transform active:scale-95">확인</button>
+        <div class="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl">
+            <h3 class="text-2xl font-black mb-2">신청 완료!</h3>
+            <p class="text-slate-500 mb-8">성공적으로 저장되었습니다.</p>
+            <button onclick="closeModal()" class="w-full py-4 bg-blue-600 text-white rounded-xl font-bold">확인</button>
         </div>
     </div>
 
-    <div class="max-w-6xl mx-auto space-y-8">
-        <header class="text-center py-6">
-            <h1 class="text-4xl font-black text-slate-900 tracking-tight mb-2">2학년 2반 체험 신청</h1>
-            <p class="text-slate-500 font-medium italic">실시간 정원이 반영되는 신청 시스템입니다.</p>
+    <div class="max-w-6xl mx-auto space-y-6">
+        <header class="text-center">
+            <h1 class="text-2xl font-black text-slate-800">2학년 2반 체험 활동 신청</h1>
         </header>
 
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <div class="lg:col-span-4 space-y-6">
-                <section id="authCard" class="card p-8 border-t-8 border-blue-600">
-                    <h2 class="font-black text-slate-800 text-xs uppercase tracking-widest mb-6 flex items-center">
-                        <span class="w-2 h-2 bg-blue-600 rounded-full mr-2"></span> 1. 본인 확인
-                    </h2>
-                    <div id="authInputGroup" class="space-y-4">
-                        <select id="studentSelect" class="w-full p-4 rounded-2xl bg-slate-50 ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-bold"></select>
-                        <input id="studentPw" type="password" class="w-full p-4 rounded-2xl bg-slate-50 ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-mono" placeholder="비밀번호">
-                        <button onclick="handleAuth()" class="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg transition-transform active:scale-95">인증하기</button>
+                <section class="card p-6 border-t-4 border-blue-500">
+                    <h2 class="font-bold text-slate-700 mb-4">본인 확인</h2>
+                    <div id="authInputGroup" class="space-y-3">
+                        <select id="studentSelect" class="w-full p-3 rounded-xl bg-slate-50 border ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-blue-500"></select>
+                        <input id="studentPw" type="password" class="w-full p-3 rounded-xl bg-slate-50 border ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-blue-500" placeholder="비밀번호(생일4자리)">
+                        <button onclick="handleAuth()" class="w-full py-3 bg-slate-800 text-white rounded-xl font-bold">로그인</button>
                     </div>
-                    <div id="userInfoSection" class="hidden text-center py-4 space-y-4">
-                        <p class="font-black text-2xl text-slate-800"><span id="userNameDisplay"></span>님 반갑습니다.</p>
-                        <button onclick="logout()" class="px-4 py-2 text-slate-400 text-xs underline font-bold">다른 계정으로 로그인</button>
+                    <div id="userInfoSection" class="hidden text-center py-2">
+                        <p class="font-bold text-lg text-slate-800 mb-2"><span id="userNameDisplay"></span>님</p>
+                        <button onclick="logout()" class="text-slate-400 text-xs underline">다른 학생 로그인</button>
                     </div>
                     <div id="msgBox" class="hidden"></div>
                 </section>
 
-                <section id="programSection" class="card p-8 border-t-8 border-orange-500 locked">
-                    <h2 class="font-black text-slate-800 text-xs uppercase tracking-widest mb-6 flex items-center">
-                        <span class="w-2 h-2 bg-orange-500 rounded-full mr-2"></span> 2. 프로그램 선택
-                    </h2>
-                    <div class="space-y-6">
+                <section id="programSection" class="card p-6 border-t-4 border-orange-500 locked">
+                    <h2 class="font-bold text-slate-700 mb-4">프로그램 선택</h2>
+                    <div class="space-y-4">
                         <div>
-                            <label class="text-[10px] font-black text-blue-500 block mb-2 px-1 tracking-widest uppercase">오전 프로그램</label>
-                            <select id="amSelect" onchange="refreshSubmitButton()" class="w-full p-4 rounded-2xl bg-slate-50 ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-bold">
-                                <option value="">프로그램 선택</option>
-                            </select>
+                            <label class="text-[10px] font-bold text-slate-400 block mb-1">오전</label>
+                            <select id="amSelect" class="w-full p-3 rounded-xl bg-slate-50 border ring-1 ring-slate-200 outline-none"></select>
                         </div>
                         <div>
-                            <label class="text-[10px] font-black text-orange-500 block mb-2 px-1 tracking-widest uppercase">오후 프로그램</label>
-                            <select id="pmSelect" onchange="refreshSubmitButton()" class="w-full p-4 rounded-2xl bg-slate-50 ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-bold">
-                                <option value="">프로그램 선택</option>
-                            </select>
+                            <label class="text-[10px] font-bold text-slate-400 block mb-1">오후</label>
+                            <select id="pmSelect" class="w-full p-3 rounded-xl bg-slate-50 border ring-1 ring-slate-200 outline-none"></select>
                         </div>
-                        <button id="submitBtn" onclick="saveAssignment()" class="w-full py-5 text-white rounded-2xl font-black shadow-xl transition-all">프로그램을 선택하세요</button>
+                        <button id="submitBtn" onclick="saveAssignment()" class="w-full py-4 bg-blue-600 text-white rounded-xl font-black shadow-lg">신청하기</button>
                     </div>
                 </section>
             </div>
 
             <div class="lg:col-span-8 space-y-6">
-                <section class="card p-8">
-                    <h2 class="font-black text-slate-800 mb-8 flex items-center text-xl">
-                        <span class="mr-3 text-2xl">📊</span> 실시간 정원 현황
+                <section class="card p-6">
+                    <h2 class="font-bold text-slate-700 mb-4 flex justify-between">
+                        <span>📊 실시간 현황</span>
+                        <span class="text-xs font-normal text-slate-400">총 <span id="totalCount" class="text-blue-500 font-bold">0</span>명 신청</span>
                     </h2>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div>
-                            <p class="text-[10px] font-black text-slate-400 mb-4 tracking-[0.2em] uppercase">오전 프로그램</p>
-                            <div id="amStatus" class="space-y-3"></div>
-                        </div>
-                        <div>
-                            <p class="text-[10px] font-black text-slate-400 mb-4 tracking-[0.2em] uppercase">오후 프로그램</p>
-                            <div id="pmStatus" class="space-y-3"></div>
-                        </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div id="amStatus" class="space-y-2"></div>
+                        <div id="pmStatus" class="space-y-2"></div>
                     </div>
                 </section>
 
-                <section class="card p-8">
-                    <div class="flex justify-between items-center mb-8">
-                        <h2 class="font-black text-slate-800 flex items-center text-xl">
-                            <span class="mr-3 text-2xl">📋</span> 현재 신청 명단
-                        </h2>
-                        <span class="text-xs font-black text-slate-500 bg-slate-100 px-4 py-2 rounded-full font-mono">
-                            총원: <span id="totalCount" class="text-blue-600">0</span> / 20
-                        </span>
-                    </div>
+                <section class="card p-6 overflow-hidden">
+                    <h2 class="font-bold text-slate-700 mb-4">명단 확인</h2>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>
-                                <tr class="bg-slate-50 text-[10px] text-slate-400 font-black uppercase tracking-widest">
-                                    <th class="p-4 rounded-l-xl">성명</th>
-                                    <th class="p-4">오전 선택</th>
-                                    <th class="p-4">오후 선택</th>
-                                    <th class="p-4 text-center rounded-r-xl">관리</th>
+                                <tr class="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                    <th class="p-3">성명</th>
+                                    <th class="p-3">오전</th>
+                                    <th class="p-3">오후</th>
+                                    <th class="p-3 text-center">관리</th>
                                 </tr>
                             </thead>
-                            <tbody id="assignmentTable" class="divide-y divide-slate-50"></tbody>
+                            <tbody id="assignmentTable"></tbody>
                         </table>
                     </div>
                 </section>
