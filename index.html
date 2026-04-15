@@ -3,25 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>체험 신청 시스템</title>
+    <title>체험 프로그램 배정 관리 시스템</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Firebase 설정
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'program-assign-v1';
+        // Firebase 설정값
+        const firebaseConfig = {
+            apiKey: "AIzaSyBJ-N3AHOzMDSBqKKFtW-kGIGJc6pJJLuw",
+            authDomain: "sn2-2-99263.firebaseapp.com",
+            projectId: "sn2-2-99263",
+            storageBucket: "sn2-2-99263.firebasestorage.app",
+            messagingSenderId: "531736022723",
+            appId: "1:531736022723:web:90fab577f55a1456635c76"
+        };
 
-        // 설정값
-        const ADMIN_PW = "2026"; // 교사 전용 비밀번호
+        const appId = 'program-assign-v1';
 
-        // 학생 명단 (성명: 생일4자리)
+        // Firebase 초기화
+        let db, auth;
+        try {
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (e) {
+            console.error("Firebase 초기화 에러:", e);
+        }
+
+        const ADMIN_PW = "2026";
+
         const studentMaster = {
             "강호윤": "1126", "김건우": "0604", "김민수": "1117", "김시훈": "0612", "김어진": "0426",
             "김예은": "0925", "류혜림": "0910", "박윤정": "0522", "서지민": "0703", "신의현": "0516",
@@ -29,7 +42,6 @@
             "임지민": "1119", "정윤주": "0715", "조진무": "0407", "조해준": "0515", "한은서": "0426"
         };
 
-        // 프로그램 리스트 (정원 포함)
         const programData = {
             am: [
                 { id: 1, name: "요리-구름도우피자", limit: 2 },
@@ -54,53 +66,56 @@
         };
 
         let assignments = [];
-        let authenticatedUser = null; // 학생 이름 혹은 'ADMIN'
+        let authenticatedUser = null; 
         let isAdmin = false;
-        let isEditingForStudent = false; // 관리자가 학생 대신 수정 중인지 여부
-        let user = null;
+        let isEditingForStudent = false; 
 
-        // 초기 인증
-        async function initAuth() {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
+        // 초기 실행 함수: UI를 먼저 그리고 인증 시도
+        async function initApp() {
+            // 1. UI 초기화 (명단 및 프로그램 표시)
+            updateUI(); 
+            
+            // 2. 인증 시작
+            if (!auth) return;
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    listenData(); // 인증 성공 시 실시간 데이터 감시 시작
                 } else {
-                    await signInAnonymously(auth);
+                    signInAnonymously(auth).catch(err => {
+                        if(err.code === 'auth/configuration-not-found') {
+                            showMessage("콘솔에서 '익명 로그인'을 켜주세요.", true);
+                        }
+                        console.error("인증 에러:", err);
+                    });
                 }
-                onAuthStateChanged(auth, (u) => {
-                    user = u;
-                    if (u) listenData();
-                });
-            } catch (err) {
-                console.error(err);
-                showMessage("인증 오류가 발생했습니다.", true);
-            }
+            });
         }
 
-        // 데이터 실시간 감시
         function listenData() {
             const q = collection(db, 'artifacts', appId, 'public', 'data', 'assignments');
             onSnapshot(q, (snapshot) => {
                 assignments = snapshot.docs.map(doc => doc.data());
-                updateUI();
-                // 학생 본인이 접속 중일 때만 기존 데이터 체크
+                updateUI(); // 데이터 변경 시 UI 갱신
                 if (authenticatedUser && !isAdmin) checkExistingAssignment(authenticatedUser);
-            }, (error) => console.error(error));
+            }, (error) => {
+                console.error("데이터 감시 에러:", error);
+                // 권한 에러 발생 시 안내 (Firestore 규칙 미설정 등)
+                if(error.code === 'permission-denied') {
+                    console.log("Firestore 규칙 확인 필요");
+                }
+            });
         }
 
-        // 로그인 로직 (학생 혹은 교사)
         window.handleAuth = () => {
             const name = document.getElementById('studentSelect').value;
             const pw = document.getElementById('studentPw').value;
 
-            // 1. 교사 인증 체크
             if (pw === ADMIN_PW) {
                 enterAdminMode();
                 return;
             }
 
-            // 2. 학생 인증 체크
-            if (!name) return showMessage("이름을 선택하거나 비밀번호를 입력해주세요.", true);
+            if (!name) return showMessage("이름을 선택해주세요.", true);
             if (studentMaster[name] !== pw) return showMessage("비밀번호가 올바르지 않습니다.", true);
 
             authenticatedUser = name;
@@ -144,8 +159,6 @@
             document.getElementById('logoutBtn').classList.add('hidden');
             document.getElementById('adminControls').classList.add('hidden');
             document.getElementById('programSection').classList.add('locked');
-            document.getElementById('studentPw').value = '';
-            document.getElementById('studentSelect').value = '';
             updateUI();
         };
 
@@ -178,13 +191,6 @@
             if (!amId || !pmId) return showMessage("프로그램을 선택해주세요.", true);
             if (amId === pmId) return showMessage("오전/오후 동일한 프로그램은 안됩니다.", true);
 
-            // 정원 체크 (자신의 기존 선택을 제외한 나머지 인원 체크)
-            const others = assignments.filter(a => a.name !== authenticatedUser);
-            const amFull = others.filter(a => a.amId == amId).length >= programData.am.find(p=>p.id==amId).limit;
-            const pmFull = others.filter(a => a.pmId == pmId).length >= programData.pm.find(p=>p.id==pmId).limit;
-
-            if (amFull || pmFull) return showMessage("선택한 프로그램의 정원이 초과되었습니다.", true);
-
             try {
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'assignments', authenticatedUser), {
                     name: authenticatedUser,
@@ -195,36 +201,31 @@
                 showMessage("성공적으로 저장되었습니다.");
                 
                 if (isEditingForStudent) {
-                    // 관리자가 수정 중이었다면 다시 관리자 모드로 복귀
                     isEditingForStudent = false;
                     enterAdminMode();
                 } else {
                     window.logout();
                 }
-            } catch (err) { showMessage("저장 오류", true); }
+            } catch (err) { 
+                console.error(err);
+                showMessage("저장 오류 (규칙 확인 필요)", true); 
+            }
         };
 
-        // 관리자용 삭제
         window.adminDelete = async (name) => {
-            if (!isAdmin && authenticatedUser !== 'ADMIN') return;
+            if (!isAdmin) return;
             if (confirm(`'${name}' 학생의 배정을 취소하시겠습니까?`)) {
                 await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'assignments', name));
                 showMessage("삭제 완료");
             }
         };
 
-        // 관리자용 수정 (대리 수정)
         window.adminEdit = (name) => {
-            const data = assignments.find(a => a.name === name);
-            if (!data) return;
-            
             isEditingForStudent = true;
             authenticatedUser = name; 
-            // UI 업데이트
             document.getElementById('programSection').classList.remove('locked');
             document.getElementById('userInfo').innerText = `[관리자] ${name} 학생 수정 중...`;
             checkExistingAssignment(name);
-            showMessage(`${name} 학생의 정보를 수정할 수 있습니다.`, false);
         };
 
         function updateUI() {
@@ -237,31 +238,31 @@
                 pmUsage[a.pmId] = (pmUsage[a.pmId] || 0) + 1;
             });
 
-            // 학생 선택 드롭다운
+            // 학생 선택 셀렉트 박스 채우기
             const sel = document.getElementById('studentSelect');
-            const cur = sel.value;
-            sel.innerHTML = '<option value="">성명 선택</option>';
-            Object.keys(studentMaster).sort().forEach(n => {
-                const opt = document.createElement('option');
-                opt.value = n;
-                opt.innerText = n + (assignedNames.includes(n) ? " (완료)" : "");
-                sel.appendChild(opt);
-            });
-            sel.value = cur;
+            if(sel) {
+                const cur = sel.value;
+                sel.innerHTML = '<option value="">성명 선택</option>';
+                Object.keys(studentMaster).sort().forEach(n => {
+                    const opt = document.createElement('option');
+                    opt.value = n;
+                    opt.innerText = n + (assignedNames.includes(n) ? " (완료)" : "");
+                    sel.appendChild(opt);
+                });
+                sel.value = cur;
+            }
 
-            // 현황판 및 선택지 업데이트
             renderStatus('am', amUsage, 'amStatus', 'amSelect');
             renderStatus('pm', pmUsage, 'pmStatus', 'pmSelect');
             renderTable();
-
-            // 총 인원 표시 업데이트
-            const countDisplay = document.getElementById('countDisplay');
-            if (countDisplay) countDisplay.innerText = assignments.length;
+            document.getElementById('countDisplay').innerText = assignments.length;
         }
 
         function renderStatus(type, usage, statusId, selectId) {
             const statusDiv = document.getElementById(statusId);
             const selectElem = document.getElementById(selectId);
+            if(!statusDiv || !selectElem) return;
+
             const cur = selectElem.value;
             statusDiv.innerHTML = '';
             selectElem.innerHTML = `<option value="">선택하세요</option>`;
@@ -270,15 +271,14 @@
                 const used = usage[p.id] || 0;
                 const isFull = used >= p.limit;
                 const div = document.createElement('div');
-                div.className = `p-2.5 rounded-lg border text-xs flex justify-between items-center ${isFull ? 'bg-red-50 text-red-400 border-red-100' : 'bg-white border-slate-200'}`;
-                div.innerHTML = `<span class="truncate pr-1">${p.name}</span> <b class="whitespace-nowrap">${used}/${p.limit}</b>`;
+                div.className = `p-2 rounded-lg border text-xs flex justify-between items-center ${isFull ? 'bg-red-50 text-red-400 border-red-100' : 'bg-white border-slate-200'}`;
+                div.innerHTML = `<span class="truncate pr-1">${p.name}</span> <b>${used}/${p.limit}</b>`;
                 statusDiv.appendChild(div);
 
                 const opt = document.createElement('option');
                 opt.value = p.id;
                 opt.innerText = `${p.name} (${isFull ? '매진' : (p.limit-used)+'석'})`;
                 
-                // 본인이 이미 선택한 항목이거나, 교사가 학생 모드로 수정 중일 때 본인 기존 선택지는 활성화
                 const myAssigned = authenticatedUser && assignments.find(a => a.name === authenticatedUser)?.[`${type}Id`] == p.id;
                 if (isFull && !myAssigned) opt.disabled = true;
                 selectElem.appendChild(opt);
@@ -288,171 +288,126 @@
 
         function renderTable() {
             const tbody = document.getElementById('assignmentTable');
+            if(!tbody) return;
             tbody.innerHTML = '';
             const sorted = [...assignments].sort((a,b)=>a.name.localeCompare(b.name,'ko'));
             sorted.forEach(a => {
                 const amN = programData.am.find(p=>p.id==a.amId)?.name || "-";
                 const pmN = programData.pm.find(p=>p.id==a.pmId)?.name || "-";
                 const tr = document.createElement('tr');
-                tr.className = "border-b hover:bg-slate-50 transition-colors";
+                tr.className = "border-b hover:bg-slate-50";
                 tr.innerHTML = `
                     <td class="p-3 font-medium text-slate-800">${a.name}</td>
-                    <td class="p-3 text-blue-600 text-xs font-medium">${amN.includes('-') ? amN.split('-')[1] : amN}</td>
-                    <td class="p-3 text-orange-600 text-xs font-medium">${pmN.includes('-') ? pmN.split('-')[1] : pmN}</td>
+                    <td class="p-3 text-blue-600 text-xs">${amN.includes('-') ? amN.split('-')[1] : amN}</td>
+                    <td class="p-3 text-orange-600 text-xs">${pmN.includes('-') ? pmN.split('-')[1] : pmN}</td>
                     <td class="p-3 text-center">
-                        ${isAdmin || authenticatedUser === 'ADMIN' ? `
-                            <button onclick="adminEdit('${a.name}')" class="text-blue-500 hover:bg-blue-50 px-2 py-1 rounded text-xs">수정</button>
-                            <button onclick="adminDelete('${a.name}')" class="text-red-500 hover:bg-red-50 px-2 py-1 rounded text-xs">취소</button>
+                        ${isAdmin ? `
+                            <button onclick="adminEdit('${a.name}')" class="text-blue-500 mr-2">수정</button>
+                            <button onclick="adminDelete('${a.name}')" class="text-red-500">취소</button>
                         ` : '-'}
                     </td>
                 `;
                 tbody.appendChild(tr);
             });
-            if (assignments.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="p-10 text-center text-slate-400">신청 내역이 없습니다.</td></tr>';
-            }
         }
 
-        // 미신청 학생 보기 (모달 방식)
         window.showUnassigned = () => {
             const done = assignments.map(a => a.name);
             const list = Object.keys(studentMaster).filter(n => !done.includes(n)).sort();
             const container = document.getElementById('unassignedList');
-            
-            if (list.length === 0) {
-                container.innerHTML = '<p class="col-span-2 text-center py-4 text-green-600 font-bold">🎉 모든 학생이 신청했습니다!</p>';
-            } else {
-                container.innerHTML = list.map(n => `<div class="bg-slate-50 p-2 rounded border border-slate-200 text-center font-bold text-slate-700">${n}</div>`).join('');
-            }
-            
+            container.innerHTML = list.length === 0 ? '🎉 전원 신청 완료!' : list.map(n => `<div class="bg-slate-50 p-2 rounded border text-center font-bold">${n}</div>`).join('');
             document.getElementById('unassignedModal').classList.remove('hidden');
         };
 
-        window.closeModal = () => {
-            document.getElementById('unassignedModal').classList.add('hidden');
-        };
+        window.closeModal = () => document.getElementById('unassignedModal').classList.add('hidden');
 
         window.showMessage = (msg, isErr) => {
             const b = document.getElementById('msgBox');
+            if(!b) return;
             b.innerText = msg;
-            b.className = `mt-4 p-3 rounded-xl text-center text-sm font-bold shadow-sm ${isErr ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`;
+            b.className = `mt-4 p-3 rounded-xl text-center text-sm font-bold ${isErr ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`;
             b.classList.remove('hidden');
             setTimeout(()=>b.classList.add('hidden'), 3500);
         };
 
-        window.onload = initAuth;
+        // window.onload 대신 스크립트 로드 즉시 실행하도록 변경
+        initApp();
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
-        body { font-family: 'Noto Sans KR', sans-serif; background-color: #f8fafc; color: #1e293b; }
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #f8fafc; }
         .card { background: white; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
         .locked { opacity: 0.2; pointer-events: none; filter: grayscale(1); }
         .auth-success { border-color: #10b981 !important; }
-        .admin-mode { border-color: #6366f1 !important; background-color: #f5f7ff; }
+        .admin-mode { border-color: #6366f1 !important; }
         .modal-bg { background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); }
-        select, input { border: 1px solid #e2e8f0; transition: all 0.2s; }
-        select:focus, input:focus { border-color: #3b82f6; ring: 2px rgba(59, 130, 246, 0.1); }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
-        @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-        .scale-in { animation: scaleIn 0.2s ease-out; }
     </style>
 </head>
 <body class="p-4 md:p-8">
     <div class="max-w-5xl mx-auto">
         <header class="text-center mb-10">
-            <h1 class="text-3xl font-bold text-slate-800 tracking-tight">체험 신청 시스템</h1>
-            <p class="text-slate-500 text-sm mt-2">안전하고 신속하게 프로그램을 신청하세요.</p>
+            <h1 class="text-3xl font-bold text-slate-800">방과후 체험 신청 시스템</h1>
         </header>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- 왼쪽: 인증 및 입력 -->
-            <div class="lg:col-span-1 space-y-6">
-                <div id="authCard" class="card p-6 border-t-8 border-blue-600 transition-all">
-                    <h2 class="font-bold mb-4 text-slate-700 flex items-center">
-                        <span class="mr-2">🔐</span> 본인 인증
-                    </h2>
-                    
+            <div class="space-y-6">
+                <div id="authCard" class="card p-6 border-t-8 border-blue-600">
+                    <h2 class="font-bold mb-4">🔐 본인 인증</h2>
                     <div id="authInputGroup" class="space-y-4">
-                        <select id="studentSelect" class="w-full p-3 rounded-xl outline-none bg-slate-50"></select>
+                        <select id="studentSelect" class="w-full p-3 rounded-xl bg-slate-50 outline-none">
+                            <option value="">불러오는 중...</option>
+                        </select>
                         <div class="flex gap-2">
-                            <input id="studentPw" type="password" class="flex-1 p-3 rounded-xl outline-none bg-white" placeholder="비밀번호(4자리)">
-                            <button onclick="handleAuth()" class="px-5 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-colors">확인</button>
+                            <input id="studentPw" type="password" class="flex-1 p-3 rounded-xl border outline-none" placeholder="생일 4자리">
+                            <button onclick="handleAuth()" class="px-5 bg-slate-800 text-white rounded-xl font-bold">확인</button>
                         </div>
                     </div>
-
                     <div id="userInfo" class="hidden py-3 font-bold text-blue-700 text-center bg-blue-50 rounded-xl mb-4"></div>
-                    <button id="logoutBtn" onclick="logout()" class="hidden w-full py-2 text-xs text-slate-400 hover:text-red-500 transition-colors underline decoration-dotted">인증 해제 및 다시 로그인</button>
-
-                    <div id="msgBox" class="hidden animate-pulse"></div>
+                    <button id="logoutBtn" onclick="logout()" class="hidden w-full py-2 text-xs text-slate-400 underline">인증 해제</button>
+                    <div id="msgBox" class="hidden"></div>
                 </div>
 
-                <div id="programSection" class="card p-6 locked transition-all duration-300">
-                    <h2 class="font-bold mb-6 text-slate-700 flex items-center">
-                        <span class="mr-2">📝</span> 프로그램 선택
-                    </h2>
+                <div id="programSection" class="card p-6 locked">
+                    <h2 class="font-bold mb-6">📝 프로그램 선택</h2>
                     <div class="space-y-5">
-                        <div>
-                            <label class="text-xs font-bold text-slate-400 ml-1">오전 수업 (AM)</label>
-                            <select id="amSelect" class="w-full p-3 rounded-xl outline-none mt-1 bg-slate-50 focus:bg-white"></select>
-                        </div>
-                        <div>
-                            <label class="text-xs font-bold text-slate-400 ml-1">오후 수업 (PM)</label>
-                            <select id="pmSelect" class="w-full p-3 rounded-xl outline-none mt-1 bg-slate-50 focus:bg-white"></select>
-                        </div>
-                        <button id="submitBtn" onclick="saveAssignment()" class="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 active:scale-[0.98] transition-all">신청 완료</button>
+                        <select id="amSelect" class="w-full p-3 rounded-xl bg-slate-50 outline-none">
+                            <option value="">선택하세요</option>
+                        </select>
+                        <select id="pmSelect" class="w-full p-3 rounded-xl bg-slate-50 outline-none">
+                            <option value="">선택하세요</option>
+                        </select>
+                        <button id="submitBtn" onclick="saveAssignment()" class="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-100">신청 완료</button>
                     </div>
                 </div>
 
-                <div id="adminControls" class="hidden card p-6 bg-indigo-50 border-indigo-200 border">
-                    <h2 class="font-bold mb-4 text-indigo-800 flex items-center">
-                        <span class="mr-2">🛠</span> 교사 관리 메뉴
-                    </h2>
-                    <div class="space-y-2">
-                        <button onclick="showUnassigned()" class="w-full py-3 bg-white border border-indigo-200 text-indigo-700 rounded-xl font-bold text-sm shadow-sm hover:bg-indigo-100 transition-colors">
-                            미신청 학생 확인하기
-                        </button>
-                        <button onclick="window.print()" class="w-full py-3 bg-white border border-indigo-200 text-slate-600 rounded-xl text-sm hover:bg-indigo-100 transition-colors">
-                            현재 페이지 인쇄
-                        </button>
-                    </div>
+                <div id="adminControls" class="hidden card p-6 bg-indigo-50 border border-indigo-200">
+                    <button onclick="showUnassigned()" class="w-full py-3 bg-white border border-indigo-200 text-indigo-700 rounded-xl font-bold text-sm mb-2">미신청 학생 확인</button>
+                    <button onclick="window.print()" class="w-full py-2 text-slate-400 text-xs">인쇄하기</button>
                 </div>
             </div>
 
-            <!-- 오른쪽: 현황 및 명단 -->
             <div class="lg:col-span-2 space-y-6">
                 <div class="card p-6">
-                    <h2 class="font-bold mb-5 text-slate-700 border-b pb-3 flex justify-between items-center">
-                        <span>📊 실시간 잔여석</span>
-                        <span class="text-[10px] font-normal text-slate-400 uppercase tracking-widest">Real-time status</span>
-                    </h2>
+                    <h2 class="font-bold mb-5 border-b pb-3">📊 실시간 잔여석</h2>
                     <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-2">
-                            <h3 class="text-xs font-bold text-blue-500 mb-2 px-1">오전 세션</h3>
-                            <div id="amStatus" class="space-y-1.5"></div>
-                        </div>
-                        <div class="space-y-2">
-                            <h3 class="text-xs font-bold text-orange-500 mb-2 px-1">오후 세션</h3>
-                            <div id="pmStatus" class="space-y-1.5"></div>
-                        </div>
+                        <div id="amStatus" class="space-y-1.5 text-slate-400 text-xs text-center">오전 목록 불러오는 중...</div>
+                        <div id="pmStatus" class="space-y-1.5 text-slate-400 text-xs text-center">오후 목록 불러오는 중...</div>
                     </div>
                 </div>
 
                 <div class="card p-6">
-                    <h2 class="font-bold mb-5 text-slate-700 border-b pb-3 flex justify-between items-center">
+                    <h2 class="font-bold mb-5 border-b pb-3 flex justify-between items-center">
                         <span>📋 신청 완료 명단</span>
-                        <span class="text-xs font-normal text-slate-400">총 <span id="countDisplay" class="font-bold text-blue-600">0</span>명</span>
+                        <span class="text-xs font-normal">총 <span id="countDisplay">0</span>명</span>
                     </h2>
-                    <div class="max-h-[500px] overflow-y-auto custom-scrollbar">
+                    <div class="overflow-x-auto">
                         <table class="w-full text-sm text-left">
-                            <thead class="bg-slate-50 sticky top-0 z-10">
+                            <thead class="bg-slate-50">
                                 <tr>
                                     <th class="p-3 border-b text-slate-500 font-medium">성명</th>
-                                    <th class="p-3 border-b text-slate-500 font-medium">오전 프로그램</th>
-                                    <th class="p-3 border-b text-slate-500 font-medium">오후 프로그램</th>
-                                    <th class="p-3 border-b text-center text-slate-500 font-medium">조작</th>
+                                    <th class="p-3 border-b text-slate-500 font-medium">오전</th>
+                                    <th class="p-3 border-b text-slate-500 font-medium">오후</th>
+                                    <th class="p-3 border-b text-center text-slate-500 font-medium">관리</th>
                                 </tr>
                             </thead>
                             <tbody id="assignmentTable"></tbody>
@@ -463,19 +418,11 @@
         </div>
     </div>
 
-    <!-- 미신청 학생 모달 -->
     <div id="unassignedModal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-bg p-4">
-        <div class="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl scale-in transform transition-all">
-            <div class="flex justify-between items-center mb-6">
-                <h3 class="text-xl font-bold text-slate-800">미신청 학생 목록</h3>
-                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-            <div id="unassignedList" class="grid grid-cols-2 gap-3 max-h-80 overflow-y-auto p-1 custom-scrollbar">
-                <!-- 리스트 삽입 영역 -->
-            </div>
-            <button onclick="closeModal()" class="w-full mt-8 py-4 bg-slate-800 text-white rounded-2xl font-bold hover:bg-slate-900 transition-colors shadow-lg">확인 완료</button>
+        <div class="bg-white rounded-3xl w-full max-w-sm p-8 shadow-2xl">
+            <h3 class="text-xl font-bold mb-6 text-center">미신청 학생 목록</h3>
+            <div id="unassignedList" class="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto"></div>
+            <button onclick="closeModal()" class="w-full mt-8 py-4 bg-slate-800 text-white rounded-2xl font-bold">닫기</button>
         </div>
     </div>
 </body>
