@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>체험 프로그램 배정 관리</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #f8fafc; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); transition: all 0.3s ease; }
+        .modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+        .locked { opacity: 0.4; pointer-events: none; filter: grayscale(1); }
+        .auth-success { border-color: #10b981 !important; background-color: #ecfdf5; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-slate-800">체험 프로그램 배정 관리 시스템</h1>
+            <p class="text-slate-500 mt-2">본인의 비밀번호(생년월일 4자리)를 입력하여 신청하세요.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- 왼쪽: 신청 및 인증 -->
+            <div class="lg:col-span-1">
+                <div id="inputCard" class="card p-6 sticky top-8 border-t-4 border-blue-500">
+                    <h2 class="text-xl font-bold mb-4 text-slate-700 border-b pb-2">학생 본인 인증</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">이름 선택</label>
+                            <select id="studentSelect" onchange="resetAuth()" class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                                <option value="">이름을 선택하세요</option>
+                            </select>
+                        </div>
+                        <div id="authSection">
+                            <label class="block text-sm font-medium text-slate-600 mb-1">비밀번호(숫자 4자리)</label>
+                            <div class="flex gap-2">
+                                <input id="studentPw" type="password" maxlength="4" class="flex-1 p-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" placeholder="****">
+                                <button onclick="verifyStudent()" class="px-4 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-700 text-sm font-bold transition">확인</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="programSection" class="mt-8 pt-6 border-t locked">
+                        <h2 class="text-xl font-bold mb-4 text-slate-700">프로그램 선택</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-600 mb-1">오전 프로그램</label>
+                                <select id="amSelect" class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <option value="">오전 프로그램 선택</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-600 mb-1">오후 프로그램</label>
+                                <select id="pmSelect" class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <option value="">오후 프로그램 선택</option>
+                                </select>
+                            </div>
+                            <button id="submitBtn" onclick="addAssignment()" class="w-full bg-blue-600 text-white py-3 rounded-md hover:bg-blue-700 transition font-bold mt-4 shadow-lg">신청 완료</button>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6 pt-4 border-t">
+                        <button onclick="checkUnassigned()" class="w-full bg-slate-100 text-slate-700 py-2 rounded-md hover:bg-slate-200 transition text-sm font-medium border border-slate-300">
+                            🔍 미배정 학생 확인
+                        </button>
+                    </div>
+
+                    <div id="msgBox" class="mt-4 p-3 rounded-md text-sm hidden text-center font-bold"></div>
+                </div>
+            </div>
+
+            <!-- 오른쪽: 현황판 -->
+            <div class="lg:col-span-2 space-y-8">
+                <!-- 프로그램별 잔여석 현황 -->
+                <div class="card p-6">
+                    <h2 class="text-xl font-bold mb-4 text-slate-700 border-b pb-2">실시간 잔여석 현황</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="font-bold text-blue-600 mb-3 flex items-center">
+                                <span class="w-3 h-3 bg-blue-600 rounded-full mr-2"></span>오전 (AM)
+                            </h3>
+                            <div id="amStatus" class="space-y-2 text-sm"></div>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-orange-600 mb-3 flex items-center">
+                                <span class="w-3 h-3 bg-orange-600 rounded-full mr-2"></span>오후 (PM)
+                            </h3>
+                            <div id="pmStatus" class="space-y-2 text-sm"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 배정 명단 -->
+                <div class="card p-6">
+                    <div class="flex justify-between items-center mb-4 border-b pb-2">
+                        <h2 class="text-xl font-bold text-slate-700">배정 명단 (가나다순)</h2>
+                        <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-bold">
+                            <span id="totalCount">0</span> / 20명 완료
+                        </span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th class="p-3 font-bold text-slate-600 border-b">성명</th>
+                                    <th class="p-3 font-bold text-slate-600 border-b">오전 프로그램</th>
+                                    <th class="p-3 font-bold text-slate-600 border-b">오후 프로그램</th>
+                                    <th class="p-3 font-bold text-slate-600 border-b text-center">관리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="assignmentTable">
+                                <!-- 가나다순 데이터 자동 삽입 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 미배정 학생 모달 -->
+    <div id="unassignedModal" class="modal flex items-center justify-center">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl border-2 border-slate-200">
+            <h3 class="text-xl font-bold mb-4 text-slate-800 border-b pb-2">미배정 학생 명단</h3>
+            <div id="unassignedList" class="grid grid-cols-2 gap-2 text-sm text-slate-600 py-2"></div>
+            <div class="mt-6 flex justify-end">
+                <button onclick="closeModal()" class="px-6 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-700 transition font-bold">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 학생 마스터 데이터 (이름: 이미지3 비밀번호 매칭)
+        const studentMaster = {
+            "강호윤": "1126", "김건우": "0604", "김민수": "1117", "김시훈": "0612", "김어진": "0426",
+            "김예은": "0925", "류혜림": "0910", "박윤정": "0522", "서지민": "0703", "신의현": "0516",
+            "신효은": "0927", "오준호": "1217", "온나겸": "0121", "이성희": "0302", "임유정": "1012",
+            "임지민": "1119", "정윤주": "0715", "조진무": "0407", "조해준": "0515", "한은서": "0426"
+        };
+
+        const programData = {
+            am: [
+                { id: 1, name: "요리-구름도우피자", limit: 2 },
+                { id: 2, name: "목공-창의목공", limit: 3 },
+                { id: 3, name: "미디어-디지털캐리커쳐&뱃지만들기", limit: 2 },
+                { id: 4, name: "공예-젤리곰키링", limit: 3 },
+                { id: 5, name: "예술-와이어드로잉", limit: 2 },
+                { id: 6, name: "공예-클레이페인팅숍", limit: 3 },
+                { id: 7, name: "원예-테라리움", limit: 2 },
+                { id: 8, name: "스포츠-골든에이지", limit: 3 }
+            ],
+            pm: [
+                { id: 1, name: "요리-구름도우피자", limit: 3 },
+                { id: 2, name: "목공-창의목공", limit: 2 },
+                { id: 3, name: "미디어-디지털캐리커쳐&뱃지만들기", limit: 2 },
+                { id: 4, name: "공예-젤리곰키링", limit: 3 },
+                { id: 5, name: "예술-와이어드로잉", limit: 2 },
+                { id: 6, name: "공예-클레이페인팅숍", limit: 3 },
+                { id: 7, name: "원예-테라리움", limit: 3 },
+                { id: 8, name: "스포츠-골든에이지", limit: 2 }
+            ]
+        };
+
+        let assignments = [];
+        let authenticatedUser = null;
+
+        function showMessage(text, isError = false) {
+            const box = document.getElementById('msgBox');
+            box.innerText = text;
+            box.className = `mt-4 p-3 rounded-md text-sm ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`;
+            box.classList.remove('hidden');
+            setTimeout(() => box.classList.add('hidden'), 3500);
+        }
+
+        function resetAuth() {
+            authenticatedUser = null;
+            document.getElementById('studentPw').value = '';
+            document.getElementById('programSection').classList.add('locked');
+            document.getElementById('inputCard').classList.remove('auth-success');
+            document.getElementById('authSection').classList.remove('locked');
+        }
+
+        function verifyStudent() {
+            const name = document.getElementById('studentSelect').value;
+            const pw = document.getElementById('studentPw').value;
+
+            if (!name) {
+                showMessage("먼저 이름을 선택해주세요.", true);
+                return;
+            }
+
+            if (studentMaster[name] === pw) {
+                authenticatedUser = name;
+                document.getElementById('programSection').classList.remove('locked');
+                document.getElementById('authSection').classList.add('locked');
+                document.getElementById('inputCard').classList.add('auth-success');
+                showMessage(`${name} 학생 인증 성공! 프로그램을 선택할 수 있습니다.`);
+            } else {
+                showMessage("비밀번호가 틀렸습니다. 다시 확인해주세요.", true);
+            }
+        }
+
+        function updateUI() {
+            const amUsage = {};
+            const pmUsage = {};
+            const assignedNames = assignments.map(a => a.name);
+
+            assignments.forEach(a => {
+                amUsage[a.amId] = (amUsage[a.amId] || 0) + 1;
+                pmUsage[a.pmId] = (pmUsage[a.pmId] || 0) + 1;
+            });
+
+            // 학생 선택 (가나다순은 객체 키 정렬로 보장)
+            const studentSelect = document.getElementById('studentSelect');
+            const currentVal = studentSelect.value;
+            studentSelect.innerHTML = '<option value="">이름을 선택하세요</option>';
+            Object.keys(studentMaster).sort().forEach(name => {
+                const isDone = assignedNames.includes(name);
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.innerText = isDone ? `${name} (신청 완료)` : name;
+                if (isDone) opt.disabled = true;
+                studentSelect.appendChild(opt);
+            });
+            studentSelect.value = currentVal;
+
+            // 프로그램 현황 렌더링
+            renderPrograms('am', amUsage, 'amStatus', 'amSelect');
+            renderPrograms('pm', pmUsage, 'pmStatus', 'pmSelect');
+
+            // 명단 가나다순 정렬 및 테이블 렌더링
+            renderAssignmentTable();
+            document.getElementById('totalCount').innerText = assignments.length;
+        }
+
+        function renderPrograms(type, usage, statusId, selectId) {
+            const statusDiv = document.getElementById(statusId);
+            const selectElem = document.getElementById(selectId);
+            const currentVal = selectElem.value;
+            
+            statusDiv.innerHTML = '';
+            selectElem.innerHTML = `<option value="">${type === 'am' ? '오전' : '오후'} 프로그램 선택</option>`;
+            
+            programData[type].forEach(p => {
+                const used = usage[p.id] || 0;
+                const left = p.limit - used;
+                const div = document.createElement('div');
+                div.className = `flex justify-between p-2 rounded border ${left <= 0 ? 'bg-red-50 text-red-400 border-red-100' : 'bg-white border-slate-100'}`;
+                div.innerHTML = `<span>${p.name}</span> <span class="font-mono font-bold ${left <= 0 ? 'text-red-500' : 'text-slate-600'}">${used}/${p.limit}</span>`;
+                statusDiv.appendChild(div);
+
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.innerText = `${p.name} (잔여: ${left})`;
+                if (left <= 0) opt.disabled = true;
+                selectElem.appendChild(opt);
+            });
+            selectElem.value = currentVal;
+        }
+
+        function renderAssignmentTable() {
+            const tableBody = document.getElementById('assignmentTable');
+            tableBody.innerHTML = '';
+            
+            // 이름 가나다순 정렬
+            const sortedAssignments = [...assignments].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+
+            sortedAssignments.forEach((a) => {
+                const amProg = programData.am.find(p => p.id == a.amId).name;
+                const pmProg = programData.pm.find(p => p.id == a.pmId).name;
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition border-b";
+                tr.innerHTML = `
+                    <td class="p-3 font-bold text-slate-800">${a.name}</td>
+                    <td class="p-3 text-blue-600">${amProg}</td>
+                    <td class="p-3 text-orange-600">${pmProg}</td>
+                    <td class="p-3 text-center">
+                        <button onclick="removeAssignment('${a.name}')" class="text-xs bg-red-50 text-red-500 hover:bg-red-100 px-2 py-1 rounded transition">취소</button>
+                    </td>
+                `;
+                tableBody.appendChild(tr);
+            });
+            
+            if (assignments.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-slate-400 italic">아직 신청 내역이 없습니다.</td></tr>';
+            }
+        }
+
+        function addAssignment() {
+            if (!authenticatedUser) return;
+
+            const amId = document.getElementById('amSelect').value;
+            const pmId = document.getElementById('pmSelect').value;
+
+            if (!amId || !pmId) {
+                showMessage("오전과 오후 프로그램을 모두 선택해야 합니다.", true);
+                return;
+            }
+
+            const amProg = programData.am.find(p => p.id == amId).name;
+            const pmProg = programData.pm.find(p => p.id == pmId).name;
+
+            if (amProg === pmProg) {
+                showMessage("오전과 오후에 같은 프로그램을 중복해서 신청할 수 없습니다.", true);
+                return;
+            }
+
+            assignments.push({ name: authenticatedUser, amId, pmId });
+            resetAuth();
+            document.getElementById('studentSelect').value = '';
+            updateUI();
+            showMessage("신청 완료! 배정 명단에서 본인의 이름을 확인하세요.");
+        }
+
+        function removeAssignment(name) {
+            if (confirm(`'${name}' 학생의 신청 내역을 삭제하시겠습니까?`)) {
+                assignments = assignments.filter(a => a.name !== name);
+                updateUI();
+            }
+        }
+
+        function checkUnassigned() {
+            const assignedNames = assignments.map(a => a.name);
+            const unassigned = Object.keys(studentMaster).filter(name => !assignedNames.includes(name)).sort();
+            const listDiv = document.getElementById('unassignedList');
+            listDiv.innerHTML = '';
+            
+            if (unassigned.length === 0) {
+                listDiv.innerHTML = '<p class="col-span-2 text-green-600 font-bold text-center py-4">모든 학생의 배정이 끝났습니다! ✨</p>';
+            } else {
+                unassigned.forEach(name => {
+                    const span = document.createElement('div');
+                    span.className = "bg-slate-50 p-2 rounded border border-slate-200 text-center font-bold text-slate-700 shadow-sm";
+                    span.innerText = name;
+                    listDiv.appendChild(span);
+                });
+            }
+            document.getElementById('unassignedModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('unassignedModal').style.display = 'none';
+        }
+
+        window.onload = updateUI;
+    </script>
+</body>
+</html>
