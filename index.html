@@ -94,11 +94,19 @@
 
                 <!-- 배정 명단 -->
                 <div class="card p-6">
-                    <div class="flex justify-between items-center mb-4 border-b pb-2">
-                        <h2 class="text-xl font-bold text-slate-700">배정 명단 (가나다순)</h2>
-                        <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-bold">
-                            <span id="totalCount">0</span> / 20명 완료
-                        </span>
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 border-b pb-4 gap-4">
+                        <div>
+                            <h2 class="text-xl font-bold text-slate-700">배정 명단 (가나다순)</h2>
+                            <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold mt-1 inline-block">
+                                <span id="totalCount">0</span> / 20명 완료
+                            </span>
+                        </div>
+                        <button onclick="downloadExcel()" class="bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition text-sm font-bold flex items-center gap-2 shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            엑셀(.csv) 다운로드
+                        </button>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm">
@@ -132,7 +140,7 @@
     </div>
 
     <script>
-        // 학생 마스터 데이터 (이름: 이미지3 비밀번호 매칭)
+        // 학생 마스터 데이터
         const studentMaster = {
             "강호윤": "1126", "김건우": "0604", "김민수": "1117", "김시훈": "0612", "김어진": "0426",
             "김예은": "0925", "류혜림": "0910", "박윤정": "0522", "서지민": "0703", "신의현": "0516",
@@ -212,7 +220,6 @@
                 pmUsage[a.pmId] = (pmUsage[a.pmId] || 0) + 1;
             });
 
-            // 학생 선택 (가나다순은 객체 키 정렬로 보장)
             const studentSelect = document.getElementById('studentSelect');
             const currentVal = studentSelect.value;
             studentSelect.innerHTML = '<option value="">이름을 선택하세요</option>';
@@ -226,11 +233,8 @@
             });
             studentSelect.value = currentVal;
 
-            // 프로그램 현황 렌더링
             renderPrograms('am', amUsage, 'amStatus', 'amSelect');
             renderPrograms('pm', pmUsage, 'pmStatus', 'pmSelect');
-
-            // 명단 가나다순 정렬 및 테이블 렌더링
             renderAssignmentTable();
             document.getElementById('totalCount').innerText = assignments.length;
         }
@@ -263,8 +267,6 @@
         function renderAssignmentTable() {
             const tableBody = document.getElementById('assignmentTable');
             tableBody.innerHTML = '';
-            
-            // 이름 가나다순 정렬
             const sortedAssignments = [...assignments].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 
             sortedAssignments.forEach((a) => {
@@ -290,7 +292,6 @@
 
         function addAssignment() {
             if (!authenticatedUser) return;
-
             const amId = document.getElementById('amSelect').value;
             const pmId = document.getElementById('pmSelect').value;
 
@@ -319,6 +320,41 @@
                 assignments = assignments.filter(a => a.name !== name);
                 updateUI();
             }
+        }
+
+        // 엑셀 다운로드 기능
+        function downloadExcel() {
+            if (assignments.length === 0) {
+                alert("다운로드할 데이터가 없습니다.");
+                return;
+            }
+
+            // 가나다순 정렬
+            const sortedData = [...assignments].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+            
+            // CSV 헤더
+            let csvContent = "\uFEFF"; // 한글 깨짐 방지 BOM
+            csvContent += "성명,오전 프로그램,오후 프로그램\n";
+
+            // CSV 데이터 행 생성
+            sortedData.forEach(a => {
+                const amProg = programData.am.find(p => p.id == a.amId).name;
+                const pmProg = programData.pm.find(p => p.id == a.pmId).name;
+                csvContent += `${a.name},${amProg},${pmProg}\n`;
+            });
+
+            // 파일 다운로드 트리거
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            const dateStr = new Date().toLocaleDateString().replace(/\s/g, '');
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", `체험프로그램_배정결과_${dateStr}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
         function checkUnassigned() {
